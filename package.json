@@ -1,6 +1,6 @@
 {
   "name": "undici-thread-dispatcher",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "An Undici dispatcher that routes requests over a worker thread",
   "main": "index.js",
   "scripts": {
