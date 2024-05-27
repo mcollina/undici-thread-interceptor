@@ -11,3 +11,4 @@ app.get('/', async (req, reply) => {
 })
 
 wire(app, parentPort)
+

@@ -15,10 +15,10 @@
   "author": "Matteo Collina <hello@matteocollina.com>",
   "license": "MIT",
   "devDependencies": {
+    "fastify-undici-dispatcher": "^0.6.0",
     "fastify": "^4.27.0"
   },
   "dependencies": {
-    "fastify-undici-dispatcher": "^0.6.0",
     "hyperid": "^3.2.0",
     "undici": "^6.18.1"
   }
