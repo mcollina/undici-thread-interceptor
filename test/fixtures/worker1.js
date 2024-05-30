@@ -1,14 +1,13 @@
 'use strict'
 
-const { parentPort } = require('worker_threads')   
+const { parentPort, workerData } = require('worker_threads')   
 const fastify = require('fastify')
 const { wire } = require('../../')
 
 const app = fastify()
 
 app.get('/', async (req, reply) => { 
-  reply.send({ hello: 'world' })
+  reply.send({ hello: workerData?.message || 'world' })
 })
 
 wire(app, parentPort)
-
