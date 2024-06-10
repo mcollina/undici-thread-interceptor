@@ -121,16 +121,27 @@ function wire (server, port) {
           return
         }
 
-        // So we route the message back to the port
-        // that sent the request
-        this.postMessage({
+        const newRes = {
+          headers: res.headers,
+        }
+
+        if (res.headers['content-length'].indexOf('application/json')) {
+          // fast path because it's utf-8, use a string
+          newRes.rawPayload = res.payload
+        } else {
+          // slow path, buffer
+          newRes.rawPayload = res.rawPayload
+        }
+
+        const forwardRes = {
           type: 'response',
           id,
-          res: {
-            headers: res.headers,
-            rawPayload: res.rawPayload
-          }
-        })
+          res: newRes
+        }
+
+        // So we route the message back to the port
+        // that sent the request
+        this.postMessage(forwardRes)
       }
 
       if (hasInject) {
