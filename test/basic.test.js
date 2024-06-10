@@ -47,3 +47,39 @@ test('two service in a mesh', async (t) => {
 
   deepStrictEqual(await body.json(), { hello: 'mesh' })
 })
+
+test('express', async (t) => {  
+  const worker = new Worker(join(__dirname, 'fixtures', 'express1.js'))
+  t.after(() => worker.terminate())
+
+  const interceptor = createThreadInterceptor({
+    domain: '.local'
+  })
+  interceptor.route('myserver', worker)
+
+  const agent = new Agent().compose(interceptor)
+
+  const { body, headers } = await request('http://myserver.local',{
+    dispatcher: agent
+  })
+
+  deepStrictEqual(await body.json(), { hello: 'world' })
+})
+
+test('koa', async (t) => {  
+  const worker = new Worker(join(__dirname, 'fixtures', 'koa1.js'))
+  t.after(() => worker.terminate())
+
+  const interceptor = createThreadInterceptor({
+    domain: '.local'
+  })
+  interceptor.route('myserver', worker)
+
+  const agent = new Agent().compose(interceptor)
+
+  const { body, headers } = await request('http://myserver.local',{
+    dispatcher: agent
+  })
+
+  deepStrictEqual(await body.json(), { hello: 'world' })
+})

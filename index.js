@@ -4,6 +4,7 @@ const { Dispatcher } = require('undici')
 const hyperid = require('hyperid')
 const { getGlobalDispatcher, setGlobalDispatcher} = require('undici')
 const { threadId, MessageChannel } = require('worker_threads')
+const inject = require('light-my-request')
 
 function createThreadInterceptor (opts) {
   const routes = new Map()
@@ -100,16 +101,26 @@ function createThreadInterceptor (opts) {
 function wire (server, port) {
   const interceptor = createThreadInterceptor()
   setGlobalDispatcher(getGlobalDispatcher().compose(interceptor))
+  const hasInject = typeof server.inject === 'function'
+
   function onMessage (msg) {
     if (msg.type === 'request') {
       const { id, opts } = msg
-      server.inject({
+
+      const injectOpts = {
         method: opts.method,
         url: opts.path,
         headers: opts.headers,
         query: opts.query,
         body: opts.body
-      }).then(res => {
+      }
+
+      const onInject = (err, res) => {
+        if (err) {
+          port.postMessage({ type: 'response', id, err })
+          return
+        }
+
         // So we route the message back to the port
         // that sent the request
         this.postMessage({
@@ -120,9 +131,13 @@ function wire (server, port) {
             rawPayload: res.rawPayload
           }
         })
-      }).catch(err => {
-        port.postMessage({ type: 'response', id, err })
-      })
+      }
+
+      if (hasInject) {
+        server.inject(injectOpts, onInject)
+      } else {
+        inject(server, injectOpts, onInject)
+      }
     } else if (msg.type === 'route') {
       interceptor.route(msg.url, msg.port, false)
       msg.port.on('message', onMessage)
