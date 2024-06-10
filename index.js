@@ -3,14 +3,13 @@
 const { Dispatcher } = require('undici')
 const hyperid = require('hyperid')
 const { getGlobalDispatcher, setGlobalDispatcher} = require('undici')
-const { threadId } = require('worker_threads')
+const { threadId, MessageChannel } = require('worker_threads')
 
 function createThreadInterceptor (opts) {
   const routes = new Map()
   const inFlights = new Map()
   const domain = opts?.domain
   const nextId = hyperid()
-  const routing = opts?.routing ?? true
   const res = (dispatch) => {
     return (opts, handler) => {
       let url = opts.origin
@@ -75,8 +74,9 @@ function createThreadInterceptor (opts) {
 
     if (forward) {
       for (const [key, otherPort] of routes) {
-        otherPort.postMessage({ type: 'route', url })
-        port.postMessage({ type: 'route', url: key })
+        const { port1, port2 } = new MessageChannel()
+        otherPort.postMessage({ type: 'route', url, port: port2 }, [port2])
+        port.postMessage({ type: 'route', url: key, port: port1 }, [port1])
       }
     }
 
@@ -90,31 +90,6 @@ function createThreadInterceptor (opts) {
           inFlights.delete(id)
           inflight(err, res)
         }
-      } else if (msg.type === 'request' && routing) {
-        const opts = msg.opts
-        try {
-          let url = opts.origin
-          if (!(url instanceof URL)) {
-            url = new URL(opts.path, url)
-          }
-
-          const destinationPort = routes.get(url.hostname)
-          if (!destinationPort) {
-            throw new Error('No server found for ' + url.hostname + ' in ' + threadId)
-          }
-
-          destinationPort.postMessage(msg)
-          inFlights.set(msg.id, (err, res) => {
-            if (err) {
-              port.postMessage({ type: 'response', id: msg.id, err })
-              return
-            }
-
-            port.postMessage({ type: 'response', id: msg.id, res })
-          })
-        } catch (err) {
-          port.postMessage({ type: 'response', id: msg.id, err })
-        }
       }
     })
   }
@@ -123,11 +98,9 @@ function createThreadInterceptor (opts) {
 }
 
 function wire (server, port) {
-  const interceptor = createThreadInterceptor({
-    routing: false
-  })
+  const interceptor = createThreadInterceptor()
   setGlobalDispatcher(getGlobalDispatcher().compose(interceptor))
-  port.on('message', (msg) => {
+  function onMessage (msg) {
     if (msg.type === 'request') {
       const { id, opts } = msg
       server.inject({
@@ -137,7 +110,9 @@ function wire (server, port) {
         query: opts.query,
         body: opts.body
       }).then(res => {
-        port.postMessage({
+        // So we route the message back to the port
+        // that sent the request
+        this.postMessage({
           type: 'response',
           id,
           res: {
@@ -149,9 +124,11 @@ function wire (server, port) {
         port.postMessage({ type: 'response', id, err })
       })
     } else if (msg.type === 'route') {
-      interceptor.route(msg.url, port, false)
+      interceptor.route(msg.url, msg.port, false)
+      msg.port.on('message', onMessage)
     }
-  })
+  }
+  port.on('message', onMessage)
   return interceptor
 }
 

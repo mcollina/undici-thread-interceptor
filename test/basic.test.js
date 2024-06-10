@@ -25,7 +25,7 @@ test('basic', async (t) => {
   deepStrictEqual(await body.json(), { hello: 'world' })
 })
 
-test.only('two service in a mesh', async (t) => {  
+test('two service in a mesh', async (t) => {  
   const worker1 = new Worker(join(__dirname, 'fixtures', 'worker1.js'), {
     workerData: { message: 'mesh' }
   })
