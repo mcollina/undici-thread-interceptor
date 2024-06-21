@@ -1,35 +1,16 @@
 'use strict'
 
 const { Dispatcher } = require('undici')
+const RoundRobin = require('./lib/roundrobin')
 const hyperid = require('hyperid')
 const { getGlobalDispatcher, setGlobalDispatcher} = require('undici')
 const { threadId, MessageChannel } = require('worker_threads')
 const inject = require('light-my-request')
 
-class RoundRobin {
-  constructor () {
-    this.ports = []
-    this.index = 0
-  }
-
-  next () {
-    const port = this.ports[this.index]
-    this.index = (this.index + 1) % this.ports.length
-    return port
-  }
-
-  add (port) {
-    this.ports.push(port)
-  }
-
-  [Symbol.iterator] () {
-    return this.ports[Symbol.iterator]()
-  }
-}
-
 function createThreadInterceptor (opts) {
   const routes = new Map()
-  const inFlights = new Map()
+  const portInflights = new Map()
+  const forwarded = new Map()
   const domain = opts?.domain
   const nextId = hyperid()
   const res = (dispatch) => {
@@ -62,7 +43,8 @@ function createThreadInterceptor (opts) {
       delete newOpts.dispatcher
 
       port.postMessage({ type: 'request', id, opts: newOpts, threadId })
-      inFlights.set(id, (err, res) => {
+      const inflights = portInflights.get(port)
+      inflights.set(id, (err, res) => {
         if (err) {
           handler.onError(err)
           return
@@ -101,10 +83,16 @@ function createThreadInterceptor (opts) {
       url += domain
     }
 
+    if (!forwarded.has(port)) {
+      forwarded.set(port, new Set())
+    }
+
     if (forward) {
       for (const [key, roundRobin] of routes) {
         for (const otherPort of roundRobin) {
           const { port1, port2 } = new MessageChannel()
+          forwarded.get(otherPort).add(port2)
+          forwarded.get(port).add(port1)
           otherPort.postMessage({ type: 'route', url, port: port2 }, [port2])
           port.postMessage({ type: 'route', url: key, port: port1 }, [port1])
         }
@@ -117,12 +105,34 @@ function createThreadInterceptor (opts) {
 
     routes.get(url).add(port)
 
+    function onClose () {
+      const roundRobin = routes.get(url)
+      roundRobin.remove(port)
+      for (const f of forwarded.get(port)) {
+        f.close()
+      }
+      for (const cb of portInflights.get(port).values()) {
+        cb(new Error('Worker exited'))
+      }
+
+      if (roundRobin.length === 0) {
+        routes.delete(url)
+      }
+    }
+
+    // If port is a worker, we need to remove it from the routes
+    // when it exits
+    port.on('exit', onClose)
+    port.on('close', onClose)
+
+    const inflights = new Map()
+    portInflights.set(port, inflights)
     port.on('message', (msg) => {
       if (msg.type === 'response') {
         const { id, res, err } = msg
-        const inflight = inFlights.get(id)
+        const inflight = inflights.get(id)
         if (inflight) {
-          inFlights.delete(id)
+          inflights.delete(id)
           inflight(err, res)
         }
       }
@@ -132,8 +142,8 @@ function createThreadInterceptor (opts) {
   return res
 }
 
-function wire (server, port) {
-  const interceptor = createThreadInterceptor()
+function wire (server, port, opts) {
+  const interceptor = createThreadInterceptor(opts)
   setGlobalDispatcher(getGlobalDispatcher().compose(interceptor))
   const hasInject = typeof server.inject === 'function'
 
@@ -157,6 +167,7 @@ function wire (server, port) {
 
         const newRes = {
           headers: res.headers,
+          statusCode: res.statusCode,
         }
 
         if (res.headers['content-length'].indexOf('application/json')) {
