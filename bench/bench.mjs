@@ -8,17 +8,17 @@ const worker = new Worker(join(import.meta.dirname, '..', 'test', 'fixtures', 'w
 await once(worker, 'online')
 
 const interceptor = createThreadInterceptor({
-  domain: '.local'
+  domain: '.local',
 })
 interceptor.route('myserver', worker)
 
 const agent = new Agent().compose(interceptor)
 
 console.time('request')
-let responses = []
+const responses = []
 for (let i = 0; i < 100000; i++) {
-  responses.push(request('http://myserver.local',{
-    dispatcher: agent
+  responses.push(request('http://myserver.local', {
+    dispatcher: agent,
   }))
 }
 await Promise.all(responses)

@@ -1,9 +1,8 @@
 'use strict'
 
-const { Dispatcher } = require('undici')
 const RoundRobin = require('./lib/roundrobin')
 const hyperid = require('hyperid')
-const { getGlobalDispatcher, setGlobalDispatcher} = require('undici')
+const { getGlobalDispatcher, setGlobalDispatcher } = require('undici')
 const { threadId, MessageChannel } = require('worker_threads')
 const inject = require('light-my-request')
 
@@ -38,7 +37,7 @@ function createThreadInterceptor (opts) {
 
       const id = nextId()
       const newOpts = {
-        ...opts
+        ...opts,
       }
       delete newOpts.dispatcher
 
@@ -156,7 +155,7 @@ function wire (server, port, opts) {
         url: opts.path,
         headers: opts.headers,
         query: opts.query,
-        body: opts.body
+        body: opts.body,
       }
 
       const onInject = (err, res) => {
@@ -181,7 +180,7 @@ function wire (server, port, opts) {
         const forwardRes = {
           type: 'response',
           id,
-          res: newRes
+          res: newRes,
         }
 
         // So we route the message back to the port
