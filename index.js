@@ -30,14 +30,18 @@ function createThreadInterceptor (opts) {
 
       const port = roundRobin.next()
 
-      if (opts.headers) {
-        delete opts.headers.connection
-        delete opts.headers['transfer-encoding']
+      const headers = {
+        ...opts?.headers,
       }
+
+      delete headers.connection
+      delete headers['transfer-encoding']
+      headers.host = url.host
 
       const id = nextId()
       const newOpts = {
         ...opts,
+        headers,
       }
       delete newOpts.dispatcher
 
@@ -169,7 +173,7 @@ function wire (server, port, opts) {
           statusCode: res.statusCode,
         }
 
-        if (res.headers['content-length'].indexOf('application/json')) {
+        if (res.headers['content-type'].indexOf('application/json')) {
           // fast path because it's utf-8, use a string
           newRes.rawPayload = res.payload
         } else {
