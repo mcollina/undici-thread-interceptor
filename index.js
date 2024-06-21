@@ -30,14 +30,18 @@ function createThreadInterceptor (opts) {
 
       const port = roundRobin.next()
 
-      if (opts.headers) {
-        delete opts.headers.connection
-        delete opts.headers['transfer-encoding']
+      const headers = {
+        ...opts?.headers,
       }
+
+      delete headers.connection
+      delete headers['transfer-encoding']
+      headers.host = url.host
 
       const id = nextId()
       const newOpts = {
         ...opts,
+        headers,
       }
       delete newOpts.dispatcher
 

@@ -8,6 +8,7 @@ const { createThreadInterceptor } = require('../')
 const { Agent, request } = require('undici')
 const { once } = require('events')
 const { setTimeout: sleep } = require('timers/promises')
+const Fastify = require('fastify')
 
 test('basic', async (t) => {
   const worker = new Worker(join(__dirname, 'fixtures', 'worker1.js'))
@@ -147,4 +148,74 @@ test('handle errors from inject', async (t) => {
   await rejects(request('http://myserver.local', {
     dispatcher: agent,
   }), new Error('kaboom'))
+})
+
+test('pass through with domain', async (t) => {
+  const app = Fastify()
+  app.get('/', async () => {
+    return { hello: 'world' }
+  })
+  await app.listen({ port: 0 })
+  t.after(() => app.close())
+
+  const interceptor = createThreadInterceptor({
+    domain: '.local',
+  })
+
+  const agent = new Agent().compose(interceptor)
+
+  const { statusCode, body } = await request(app.listeningOrigin, {
+    dispatcher: agent,
+  })
+
+  strictEqual(statusCode, 200)
+  deepStrictEqual(await body.json(), { hello: 'world' })
+})
+
+test('unwanted headers are removed', async (t) => {
+  const worker = new Worker(join(__dirname, 'fixtures', 'worker1.js'))
+  t.after(() => worker.terminate())
+
+  const interceptor = createThreadInterceptor({
+    domain: '.local',
+  })
+  interceptor.route('myserver', worker)
+
+  const agent = new Agent().compose(interceptor)
+
+  const { statusCode, body } = await request('http://myserver.local/echo-headers', {
+    headers: {
+      'x-foo': 'bar',
+      connection: 'keep-alive',
+      'transfer-encoding': 'chunked',
+    },
+    dispatcher: agent,
+  })
+
+  strictEqual(statusCode, 200)
+  deepStrictEqual(await body.json(), {
+    'user-agent': 'lightMyRequest',
+    host: 'myserver.local',
+    'x-foo': 'bar',
+  })
+})
+
+test('multiple headers', async (t) => {
+  const worker = new Worker(join(__dirname, 'fixtures', 'worker1.js'))
+  t.after(() => worker.terminate())
+
+  const interceptor = createThreadInterceptor({
+    domain: '.local',
+  })
+  interceptor.route('myserver', worker)
+
+  const agent = new Agent().compose(interceptor)
+
+  const { statusCode, body, headers } = await request('http://myserver.local/headers', {
+    dispatcher: agent,
+  })
+
+  strictEqual(statusCode, 200)
+  deepStrictEqual(headers['x-foo'], ['bar', 'baz'])
+  await body.json()
 })
