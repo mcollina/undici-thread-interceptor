@@ -4,7 +4,7 @@
   "description": "An Undici interceptor that routes requests over a worker thread",
   "main": "index.js",
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "eslint && borp --coverage"
   },
   "keywords": [
     "undici",
@@ -15,14 +15,17 @@
   "author": "Matteo Collina <hello@matteocollina.com>",
   "license": "MIT",
   "devDependencies": {
+    "borp": "^0.15.0",
     "express": "^4.19.2",
     "fastify": "^4.27.0",
     "fastify-undici-dispatcher": "^0.6.0",
     "koa": "^2.15.3"
   },
   "dependencies": {
+    "eslint": "^9.5.0",
     "hyperid": "^3.2.0",
     "light-my-request": "^5.13.0",
+    "neostandard": "^0.7.2",
     "undici": "^6.18.1"
   }
 }

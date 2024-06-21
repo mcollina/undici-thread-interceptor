@@ -1,28 +1,25 @@
-import { join } from 'path'
-import { Worker } from 'worker_threads'
 import { createFastifyInterceptor } from 'fastify-undici-dispatcher'
 import { Agent, request } from 'undici'
 import fastify from 'fastify'
 
 const app = fastify()
 
-app.get('/', async (req, reply) => { 
+app.get('/', async (req, reply) => {
   reply.send({ hello: 'world' })
 })
 
-
 const interceptor = createFastifyInterceptor({
-  domain: '.local'
+  domain: '.local',
 })
 interceptor.route('myserver', app)
 
 const agent = new Agent().compose(interceptor)
 
 console.time('request')
-let responses = []
+const responses = []
 for (let i = 0; i < 100000; i++) {
-  responses.push(request('http://myserver.local',{
-    dispatcher: agent
+  responses.push(request('http://myserver.local', {
+    dispatcher: agent,
   }))
 }
 await Promise.all(responses)
