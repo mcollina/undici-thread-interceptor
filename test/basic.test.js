@@ -1,7 +1,7 @@
 'use strict'
 
 const { test } = require('node:test')
-const { deepStrictEqual, strictEqual } = require('node:assert')
+const { deepStrictEqual, strictEqual, rejects } = require('node:assert')
 const { join } = require('path')
 const { Worker } = require('worker_threads')
 const { createThreadInterceptor } = require('../')
@@ -112,4 +112,39 @@ test('two service in a mesh, one is terminated, then a message is sent', async (
     message: `No server found for myserver.local in ${worker2.threadId}`,
     statusCode: 500,
   })
+})
+
+test('buffer', async (t) => {
+  const worker = new Worker(join(__dirname, 'fixtures', 'worker1.js'))
+  t.after(() => worker.terminate())
+
+  const interceptor = createThreadInterceptor({
+    domain: '.local',
+  })
+  interceptor.route('myserver', worker)
+
+  const agent = new Agent().compose(interceptor)
+
+  const { statusCode, body } = await request('http://myserver.local/buffer', {
+    dispatcher: agent,
+  })
+
+  strictEqual(statusCode, 200)
+  deepStrictEqual(Buffer.from(await body.arrayBuffer()), Buffer.from('hello'))
+})
+
+test('handle errors from inject', async (t) => {
+  const worker = new Worker(join(__dirname, 'fixtures', 'error.js'))
+  t.after(() => worker.terminate())
+
+  const interceptor = createThreadInterceptor({
+    domain: '.local',
+  })
+  interceptor.route('myserver', worker)
+
+  const agent = new Agent().compose(interceptor)
+
+  await rejects(request('http://myserver.local', {
+    dispatcher: agent,
+  }), new Error('kaboom'))
 })

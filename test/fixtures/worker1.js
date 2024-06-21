@@ -14,4 +14,8 @@ app.get('/whoami', async (req, reply) => {
   reply.send({ threadId })
 })
 
+app.get('/buffer', async (req, reply) => {
+  reply.send(Buffer.from('hello'))
+})
+
 wire(app, parentPort)

@@ -169,7 +169,7 @@ function wire (server, port, opts) {
           statusCode: res.statusCode,
         }
 
-        if (res.headers['content-length'].indexOf('application/json')) {
+        if (res.headers['content-type'].indexOf('application/json')) {
           // fast path because it's utf-8, use a string
           newRes.rawPayload = res.payload
         } else {

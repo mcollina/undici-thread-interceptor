@@ -7,6 +7,7 @@ const { Worker } = require('worker_threads')
 const { createThreadInterceptor } = require('../')
 const { Agent, request } = require('undici')
 const { once } = require('events')
+const RoundRobin = require('../lib/roundrobin')
 
 test('round-robin .route with array', async (t) => {
   const worker1 = new Worker(join(__dirname, 'fixtures', 'worker1.js'), {
@@ -140,4 +141,9 @@ test('round-robin one worker exits, in flight request', async (t) => {
   await rejects(request('http://myserver.local/whoami', {
     dispatcher: agent,
   }))
+})
+
+test('RoundRobin remove unknown port', () => {
+  const rr = new RoundRobin()
+  rr.remove({})
 })
