@@ -6,6 +6,27 @@ const { getGlobalDispatcher, setGlobalDispatcher} = require('undici')
 const { threadId, MessageChannel } = require('worker_threads')
 const inject = require('light-my-request')
 
+class RoundRobin {
+  constructor () {
+    this.ports = []
+    this.index = 0
+  }
+
+  next () {
+    const port = this.ports[this.index]
+    this.index = (this.index + 1) % this.ports.length
+    return port
+  }
+
+  add (port) {
+    this.ports.push(port)
+  }
+
+  [Symbol.iterator] () {
+    return this.ports[Symbol.iterator]()
+  }
+}
+
 function createThreadInterceptor (opts) {
   const routes = new Map()
   const inFlights = new Map()
@@ -18,8 +39,8 @@ function createThreadInterceptor (opts) {
         url = new URL(opts.path, url)
       }
 
-      const wrap = routes.get(url.hostname)
-      if (!wrap) {
+      const roundRobin = routes.get(url.hostname)
+      if (!roundRobin) {
         if (dispatch && (domain === undefined || !url.hostname.endsWith(domain))) {
           return dispatch(opts, handler)
         } else {
@@ -27,7 +48,7 @@ function createThreadInterceptor (opts) {
         }
       }
 
-      const port = wrap
+      const port = roundRobin.next()
 
       if (opts.headers) {
         delete opts.headers.connection
@@ -69,19 +90,32 @@ function createThreadInterceptor (opts) {
   }
 
   res.route = (url, port, forward = true) => {
+    if (port instanceof Array) {
+      for (const p of port) {
+        res.route(url, p, forward)
+      }
+      return
+    }
+
     if (domain && !url.endsWith(domain)) {
       url += domain
     }
 
     if (forward) {
-      for (const [key, otherPort] of routes) {
-        const { port1, port2 } = new MessageChannel()
-        otherPort.postMessage({ type: 'route', url, port: port2 }, [port2])
-        port.postMessage({ type: 'route', url: key, port: port1 }, [port1])
+      for (const [key, roundRobin] of routes) {
+        for (const otherPort of roundRobin) {
+          const { port1, port2 } = new MessageChannel()
+          otherPort.postMessage({ type: 'route', url, port: port2 }, [port2])
+          port.postMessage({ type: 'route', url: key, port: port1 }, [port1])
+        }
       }
     }
 
-    routes.set(url, port)
+    if (!routes.has(url)) {
+      routes.set(url, new RoundRobin())
+    }
+
+    routes.get(url).add(port)
 
     port.on('message', (msg) => {
       if (msg.type === 'response') {
