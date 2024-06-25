@@ -25,7 +25,7 @@
     "eslint": "^9.5.0",
     "hyperid": "^3.2.0",
     "light-my-request": "^5.13.0",
-    "neostandard": "^0.7.2",
+    "neostandard": "^0.8.0",
     "undici": "^6.18.1"
   }
 }
