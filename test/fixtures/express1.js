@@ -10,4 +10,4 @@ app.get('/', (req, res) => {
   res.send({ hello: workerData?.message || 'world' })
 })
 
-wire(app, parentPort)
+wire({ server: app, port: parentPort })

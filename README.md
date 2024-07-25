@@ -10,12 +10,12 @@ Supports:
 ## Installation
 
 ```bash
-npm install undici undici-thread-dispatcher
+npm install undici undici-thread-interceptor
 ```
 
 ## Usage
 
-In `main.js`:
+### Main (main.js)
 
 ```javascript
 import { Worker } from 'node:worker_threads'
@@ -41,23 +41,28 @@ console.log(statusCode, await body.json())
 // worker.terminate()
 ```
 
-In `worker.js`:
+### Worker (worker.js)
+
+#### Generic node HTTP application
 
 ```javascript
 import { wire } from 'undici-thread-interceptor'
 import { parentPort } from 'node:worker_threads'
-import express from 'express'
-import fastify from 'fastify'
-import Koa from 'koa'
 
 function app (req, res) {
   res.writeHead(200, { 'Content-Type': 'application/json' })
   res.end(JSON.stringify({ hello: 'world' }))
 }
 
-wire(app, parentPort)
+wire({ server: app, port: parentPort })
+```
 
-// or using fastify
+#### Fastify
+
+```javascript
+import { wire } from 'undici-thread-interceptor'
+import { parentPort } from 'node:worker_threads'
+import fastify from 'fastify'
 
 const app = fastify()
 
@@ -65,16 +70,31 @@ app.get('/', (req, reply) => {
   reply.send({ hello: 'world' })
 })
 
-// Or using express
+wire({ server: app, port: parentPort })
+```
+
+#### Express
+
+```javascript
+import { wire } from 'undici-thread-interceptor'
+import { parentPort } from 'node:worker_threads'
+import express from 'express'
+
 const app = express()
 
 app.get('/', (req, res) => {
   res.send({ hello: 'world' })
 })
 
-wire(app, parentPort)
+wire({ server: app, port: parentPort })
+```
 
-// or using Koa
+#### Koa
+
+```javascript
+import { wire } from 'undici-thread-interceptor'
+import { parentPort } from 'node:worker_threads'
+import Koa from 'koa'
 
 const app = new Koa()
 
@@ -82,8 +102,37 @@ app.use(ctx => {
   ctx.body = { hello: workerData?.message || 'world' }
 })
 
-wire(app.callback(), parentPort)
+wire({ server: app.callback(), port: parentPort })
 ```
+
+#### Replace the server at runtime
+
+```javascript
+import { wire } from 'undici-thread-interceptor'
+import { parentPort } from 'node:worker_threads'
+import fastify from 'fastify'
+
+const app1 = fastify()
+
+app1.get('/', (req, reply) => {
+  reply.send({ hello: 'this is app 1' })
+})
+
+const app2 = fastify()
+
+app2.get('/', (req, reply) => {
+  reply.send({ hello: 'this is app 2' })
+})
+
+
+const { replaceServer } = wire({ server: app1, port: parentPort })
+
+setTimeout(() => {
+  replaceServer(app2)
+}, 5000)
+
+```
+
 
 ## API
 

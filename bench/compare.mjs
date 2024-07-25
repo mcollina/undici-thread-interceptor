@@ -1,4 +1,4 @@
-import { createFastifyInterceptor } from 'fastify-undici-dispatcher'
+import { createFastifyInterceptor } from 'fastify-undici-interceptor'
 import { Agent, request } from 'undici'
 import fastify from 'fastify'
 

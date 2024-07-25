@@ -7,9 +7,7 @@ const { request } = require('undici')
 
 const app = fastify()
 
-wire(app, parentPort, {
-  domain: '.local',
-})
+wire({ server: app, port: parentPort, domain: '.local' })
 
 app.get('/', async (req, reply) => {
   const { body } = await request('http://myserver.local')

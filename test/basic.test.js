@@ -150,6 +150,22 @@ test('handle errors from inject', async (t) => {
   }), new Error('kaboom'))
 })
 
+test('throws an error when no server is wired', async (t) => {
+  const worker = new Worker(join(__dirname, 'fixtures', 'no-server.js'))
+  t.after(() => worker.terminate())
+
+  const interceptor = createThreadInterceptor({
+    domain: '.local',
+  })
+  interceptor.route('myserver', worker)
+
+  const agent = new Agent().compose(interceptor)
+
+  await rejects(request('http://myserver.local', {
+    dispatcher: agent,
+  }), new Error(`No server found for myserver.local in ${worker.threadId}`))
+})
+
 test('pass through with domain', async (t) => {
   const app = Fastify()
   app.get('/', async () => {
@@ -218,4 +234,33 @@ test('multiple headers', async (t) => {
   strictEqual(statusCode, 200)
   deepStrictEqual(headers['x-foo'], ['bar', 'baz'])
   await body.json()
+})
+
+test('case-insensitive hostnames', async (t) => {
+  const worker = new Worker(join(__dirname, 'fixtures', 'worker1.js'))
+  t.after(() => worker.terminate())
+
+  const interceptor = createThreadInterceptor({
+    domain: '.local',
+  })
+  interceptor.route('mySERver', worker)
+  interceptor.route('MySeRvEr2', worker)
+
+  const agent = new Agent().compose(interceptor)
+
+  const urls = [
+    'http://myserver.local',
+    'http://MYSERVER.local',
+    'http://MYserVER.locAL',
+    'http://myserver2.local',
+    'http://MYSERVER2.local',
+    'http://MYserVER2.locAL',
+  ]
+
+  for (const url of urls) {
+    const { statusCode, body } = await request(url, { dispatcher: agent })
+
+    strictEqual(statusCode, 200)
+    deepStrictEqual(await body.json(), { hello: 'world' })
+  }
 })
