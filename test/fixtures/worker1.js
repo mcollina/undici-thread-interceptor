@@ -28,4 +28,4 @@ app.get('/headers', (req, reply) => {
     .send({ hello: 'world' })
 })
 
-wire(app, parentPort)
+wire({ server: app, port: parentPort })

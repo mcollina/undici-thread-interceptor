@@ -10,4 +10,4 @@ app.use(ctx => {
   ctx.body = { hello: workerData?.message || 'world' }
 })
 
-wire(app.callback(), parentPort)
+wire({ server: app.callback(), port: parentPort })

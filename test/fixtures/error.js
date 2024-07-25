@@ -3,6 +3,9 @@
 const { parentPort } = require('worker_threads')
 const { wire } = require('../../')
 
-wire(function (req, res) {
-  res.destroy(new Error('kaboom'))
-}, parentPort)
+wire({
+  server: function (req, res) {
+    res.destroy(new Error('kaboom'))
+  },
+  port: parentPort,
+})

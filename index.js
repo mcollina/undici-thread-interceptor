@@ -19,7 +19,8 @@ function createThreadInterceptor (opts) {
         url = new URL(opts.path, url)
       }
 
-      const roundRobin = routes.get(url.hostname)
+      // Hostnames are case-insensitive
+      const roundRobin = routes.get(url.hostname.toLowerCase())
       if (!roundRobin) {
         if (dispatch && (domain === undefined || !url.hostname.endsWith(domain))) {
           return dispatch(opts, handler)
@@ -86,6 +87,9 @@ function createThreadInterceptor (opts) {
       url += domain
     }
 
+    // Hostname are case-insensitive
+    url = url.toLowerCase()
+
     if (!forwarded.has(port)) {
       forwarded.set(port, new Set())
     }
@@ -145,8 +149,8 @@ function createThreadInterceptor (opts) {
   return res
 }
 
-function wire (newServer, port, opts) {
-  const interceptor = createThreadInterceptor(opts)
+function wire ({ server: newServer, port, ...undiciOpts }) {
+  const interceptor = createThreadInterceptor(undiciOpts)
   setGlobalDispatcher(getGlobalDispatcher().compose(interceptor))
 
   let server
