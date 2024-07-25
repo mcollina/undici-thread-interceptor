@@ -145,10 +145,18 @@ function createThreadInterceptor (opts) {
   return res
 }
 
-function wire (server, port, opts) {
+function wire (newServer, port, opts) {
   const interceptor = createThreadInterceptor(opts)
   setGlobalDispatcher(getGlobalDispatcher().compose(interceptor))
-  const hasInject = typeof server.inject === 'function'
+
+  let server
+  let hasInject
+  replaceServer(newServer)
+
+  function replaceServer (newServer) {
+    server = newServer
+    hasInject = typeof server?.inject === 'function'
+  }
 
   function onMessage (msg) {
     if (msg.type === 'request') {
@@ -192,6 +200,16 @@ function wire (server, port, opts) {
         this.postMessage(forwardRes)
       }
 
+      if (!server) {
+        port.postMessage({
+          type: 'response',
+          id,
+          err: new Error('No server found for ' + injectOpts.headers.host + ' in ' + threadId),
+        })
+
+        return
+      }
+
       if (hasInject) {
         server.inject(injectOpts, onInject)
       } else {
@@ -202,8 +220,9 @@ function wire (server, port, opts) {
       msg.port.on('message', onMessage)
     }
   }
+
   port.on('message', onMessage)
-  return interceptor
+  return { interceptor, replaceServer }
 }
 
 module.exports.createThreadInterceptor = createThreadInterceptor

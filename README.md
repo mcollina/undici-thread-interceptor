@@ -10,7 +10,7 @@ Supports:
 ## Installation
 
 ```bash
-npm install undici undici-thread-dispatcher
+npm install undici undici-thread-interceptor
 ```
 
 ## Usage
