@@ -153,7 +153,7 @@ function createThreadInterceptor (opts) {
           inflight(err, res)
         }
       } else if (msg.type === 'address') {
-        res.setAddress(url, roundRobinIndex, msg.address)
+        res.setAddress(url, roundRobinIndex, msg.address, forward)
       }
     })
   }
@@ -172,6 +172,15 @@ function createThreadInterceptor (opts) {
     for (const [, roundRobin] of routes) {
       for (const otherPort of roundRobin) {
         otherPort.postMessage({ type: 'address', url, index, address })
+      }
+    }
+  }
+
+  /* c8 ignore next 7 */
+  res.close = () => {
+    for (const [, roundRobin] of routes) {
+      for (const otherPort of roundRobin) {
+        otherPort.close()
       }
     }
   }
