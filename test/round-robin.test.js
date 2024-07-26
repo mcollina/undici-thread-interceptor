@@ -143,6 +143,36 @@ test('round-robin one worker exits, in flight request', async (t) => {
   }))
 })
 
+test('round-robin one worker is using network', async (t) => {
+  const worker1 = new Worker(join(__dirname, 'fixtures', 'network.js'))
+  t.after(() => worker1.terminate())
+
+  const worker2 = new Worker(join(__dirname, 'fixtures', 'network.js'), { workerData: { network: true } })
+  t.after(() => worker2.terminate())
+
+  const worker3 = new Worker(join(__dirname, 'fixtures', 'network.js'))
+  t.after(() => worker3.terminate())
+
+  const interceptor = createThreadInterceptor({ domain: '.local' })
+  interceptor.route('myserver', worker1)
+  interceptor.route('myserver', worker2)
+  interceptor.route('myserver', worker3)
+
+  // Wait for the second worker to advertise its port
+  await once(worker2, 'message')
+
+  const responses = []
+  for (let i = 0; i < 3; i++) {
+    const agent = new Agent().compose(interceptor)
+
+    const { body } = await request('http://myserver.local', { dispatcher: agent })
+
+    responses.push(await body.json())
+  }
+
+  deepStrictEqual(responses, [{ via: 'thread' }, { via: 'network' }, { via: 'thread' }])
+})
+
 test('RoundRobin remove unknown port', () => {
   const rr = new RoundRobin()
   rr.remove({})

@@ -3,8 +3,10 @@
 const RoundRobin = require('./lib/roundrobin')
 const hyperid = require('hyperid')
 const { getGlobalDispatcher, setGlobalDispatcher } = require('undici')
-const { threadId, MessageChannel } = require('worker_threads')
+const { threadId, MessageChannel, parentPort } = require('worker_threads')
 const inject = require('light-my-request')
+
+const kAddress = Symbol('undici-thread-interceptor.address')
 
 function createThreadInterceptor (opts) {
   const routes = new Map()
@@ -12,6 +14,7 @@ function createThreadInterceptor (opts) {
   const forwarded = new Map()
   const domain = opts?.domain
   const nextId = hyperid()
+
   const res = (dispatch) => {
     return (opts, handler) => {
       let url = opts.origin
@@ -30,6 +33,10 @@ function createThreadInterceptor (opts) {
       }
 
       const port = roundRobin.next()
+
+      if (port[kAddress]) {
+        return dispatch({ ...opts, origin: port[kAddress] }, handler)
+      }
 
       const headers = {
         ...opts?.headers,
@@ -110,7 +117,7 @@ function createThreadInterceptor (opts) {
       routes.set(url, new RoundRobin())
     }
 
-    routes.get(url).add(port)
+    const roundRobinIndex = routes.get(url).add(port)
 
     function onClose () {
       const roundRobin = routes.get(url)
@@ -125,6 +132,9 @@ function createThreadInterceptor (opts) {
       if (roundRobin.length === 0) {
         routes.delete(url)
       }
+
+      // Notify other threads that any eventual network address for this route is no longer valid
+      res.setAddress(url, roundRobinIndex)
     }
 
     // If port is a worker, we need to remove it from the routes
@@ -142,8 +152,28 @@ function createThreadInterceptor (opts) {
           inflights.delete(id)
           inflight(err, res)
         }
+      } else if (msg.type === 'address') {
+        res.setAddress(url, roundRobinIndex, msg.address)
       }
     })
+  }
+
+  res.setAddress = (url, index, address, forward = true) => {
+    const port = routes.get(url)?.get(index)
+
+    if (port) {
+      port[kAddress] = address
+    }
+
+    if (!forward) {
+      return
+    }
+
+    for (const [, roundRobin] of routes) {
+      for (const otherPort of roundRobin) {
+        otherPort.postMessage({ type: 'address', url, index, address })
+      }
+    }
   }
 
   return res
@@ -154,12 +184,17 @@ function wire ({ server: newServer, port, ...undiciOpts }) {
   setGlobalDispatcher(getGlobalDispatcher().compose(interceptor))
 
   let server
-  let hasInject
+  let hasInject = false
   replaceServer(newServer)
 
   function replaceServer (newServer) {
     server = newServer
-    hasInject = typeof server?.inject === 'function'
+
+    if (typeof server === 'string') {
+      parentPort.postMessage({ type: 'address', address: server })
+    } else {
+      hasInject = typeof server?.inject === 'function'
+    }
   }
 
   function onMessage (msg) {
@@ -222,6 +257,8 @@ function wire ({ server: newServer, port, ...undiciOpts }) {
     } else if (msg.type === 'route') {
       interceptor.route(msg.url, msg.port, false)
       msg.port.on('message', onMessage)
+    } else if (msg.type === 'address') {
+      interceptor.setAddress(msg.url, msg.index, msg.address, false)
     }
   }
 
