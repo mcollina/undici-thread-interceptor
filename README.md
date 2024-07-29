@@ -133,6 +133,23 @@ setTimeout(() => {
 }, 5000);
 ```
 
+#### Gracefully close the worker thread
+
+If you want to gracefully close the worker thread, remember to call the `close` function of the interceptor.
+
+```javascript
+import { wire } from "undici-thread-interceptor";
+
+// ...
+
+const { interceptor } = wire({ server: app, port: parentPort });
+
+// ...
+
+interceptor.close()
+```
+
+
 ## API
 
 TBD
