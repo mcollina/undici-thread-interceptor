@@ -176,7 +176,6 @@ function createThreadInterceptor (opts) {
     }
   }
 
-  /* c8 ignore next 7 */
   res.close = () => {
     for (const [, roundRobin] of routes) {
       for (const otherPort of roundRobin) {

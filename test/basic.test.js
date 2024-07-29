@@ -264,3 +264,37 @@ test('case-insensitive hostnames', async (t) => {
     deepStrictEqual(await body.json(), { hello: 'world' })
   }
 })
+
+test('close', async (t) => {
+  const worker1 = new Worker(join(__dirname, 'fixtures', 'close.js'))
+  const worker2 = new Worker(join(__dirname, 'fixtures', 'close.js'))
+
+  const interceptor = createThreadInterceptor({
+    domain: '.local',
+  })
+  interceptor.route('myserver', worker1)
+  interceptor.route('myserver2', worker2)
+
+  const agent = new Agent().compose(interceptor)
+
+  {
+    const { statusCode, body } = await request('http://myserver.local', { dispatcher: agent })
+
+    strictEqual(statusCode, 200)
+    deepStrictEqual(await body.json(), { hello: 'world' })
+  }
+
+  {
+    const { statusCode, body } = await request('http://myserver2.local', { dispatcher: agent })
+
+    strictEqual(statusCode, 200)
+    deepStrictEqual(await body.json(), { hello: 'world' })
+  }
+
+  setTimeout(() => {
+    worker1.postMessage('close')
+    worker2.postMessage('close')
+  }, 500)
+
+  await Promise.all([once(worker1, 'exit'), once(worker2, 'exit')])
+})
