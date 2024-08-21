@@ -1,7 +1,7 @@
 'use strict'
 
 const { test } = require('node:test')
-const { deepStrictEqual, strictEqual, rejects } = require('node:assert')
+const { deepStrictEqual, strictEqual, rejects, ifError } = require('node:assert')
 const { join } = require('path')
 const { Worker } = require('worker_threads')
 const { createThreadInterceptor } = require('../')
@@ -132,6 +132,26 @@ test('buffer', async (t) => {
 
   strictEqual(statusCode, 200)
   deepStrictEqual(Buffer.from(await body.arrayBuffer()), Buffer.from('hello'))
+})
+
+test('no response headers', async (t) => {
+  const worker = new Worker(join(__dirname, 'fixtures', 'worker1.js'))
+  t.after(() => worker.terminate())
+
+  const interceptor = createThreadInterceptor({
+    domain: '.local',
+  })
+  interceptor.route('myserver', worker)
+
+  const agent = new Agent().compose(interceptor)
+
+  const { statusCode, headers, body } = await request('http://myserver.local/no-headers', {
+    dispatcher: agent,
+  })
+
+  strictEqual(statusCode, 200)
+  ifError(headers['content-type'])
+  deepStrictEqual(await body.text(), 'text')
 })
 
 test('handle errors from inject', async (t) => {

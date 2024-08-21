@@ -1,5 +1,6 @@
 'use strict'
 
+const { Readable } = require('stream')
 const { parentPort, workerData, threadId } = require('worker_threads')
 const fastify = require('fastify')
 const { wire } = require('../../')
@@ -26,6 +27,10 @@ app.get('/headers', (req, reply) => {
   reply
     .header('x-foo', ['bar', 'baz'])
     .send({ hello: 'world' })
+})
+
+app.get('/no-headers', (req, reply) => {
+  reply.send(Readable.from(['text'], { objectMode: false }))
 })
 
 wire({ server: app, port: parentPort })
