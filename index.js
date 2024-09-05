@@ -13,7 +13,13 @@ function createThreadInterceptor (opts) {
   const portInflights = new Map()
   const forwarded = new Map()
   const domain = opts?.domain
+  const timeout = opts.timeout
   const nextId = hyperid()
+
+  /* c8 ignore next 3 */
+  if (opts.timeout === true) {
+    opts.timeout = 5000
+  }
 
   const res = (dispatch) => {
     return (opts, handler) => {
@@ -55,7 +61,19 @@ function createThreadInterceptor (opts) {
 
       port.postMessage({ type: 'request', id, opts: newOpts, threadId })
       const inflights = portInflights.get(port)
+
+      let handle
+
+      if (typeof timeout === 'number') {
+        handle = setTimeout(() => {
+          inflights.delete(id)
+          handler.onError(new Error(`Timeout while waiting from a response from ${url.hostname}`))
+        }, timeout)
+      }
+
       inflights.set(id, (err, res) => {
+        clearTimeout(handle)
+
         if (err) {
           handler.onError(err)
           return
