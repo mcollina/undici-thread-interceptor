@@ -12,13 +12,12 @@ function createThreadInterceptor (opts) {
   const routes = new Map()
   const portInflights = new Map()
   const forwarded = new Map()
-  const domain = opts?.domain
-  const timeout = opts.timeout
   const nextId = hyperid()
+  const domain = opts?.domain
+  let timeout = opts?.timeout
 
-  /* c8 ignore next 3 */
-  if (opts.timeout === true) {
-    opts.timeout = 5000
+  if (timeout === true) {
+    timeout = 5000
   }
 
   const res = (dispatch) => {
