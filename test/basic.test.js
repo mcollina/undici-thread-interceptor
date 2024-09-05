@@ -319,7 +319,7 @@ test('close', async (t) => {
   await Promise.all([once(worker1, 'exit'), once(worker2, 'exit')])
 })
 
-test.only('timeout', async (t) => {
+test('timeout', async (t) => {
   const empty = new Worker(join(__dirname, 'fixtures', 'empty.js'))
 
   const interceptor = createThreadInterceptor({
