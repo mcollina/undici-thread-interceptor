@@ -90,9 +90,19 @@ function createThreadInterceptor (opts) {
             headers.push(value)
           }
         }
+
+        let aborted = false
+        handler.onConnect((err) => {
+          if (err) {
+            handler.onError(err)
+          }
+          aborted = true
+        }, {})
         handler.onHeaders(res.statusCode, headers, () => {}, res.statusMessage)
-        handler.onData(res.rawPayload)
-        handler.onComplete([])
+        if (!aborted) {
+          handler.onData(res.rawPayload)
+          handler.onComplete([])
+        }
       })
 
       return true

@@ -12,6 +12,9 @@ app.get('/', (req, reply) => {
 })
 
 app.get('/whoami', (req, reply) => {
+  if (workerData?.whoamiReturn503) {
+    return reply.code(503).send({ threadId })
+  }
   reply.send({ threadId })
 })
 
