@@ -356,3 +356,27 @@ test('timeout set to a boolean', async (t) => {
   empty.postMessage('close')
   await once(empty, 'exit')
 })
+
+test('POST', async (t) => {
+  const worker = new Worker(join(__dirname, 'fixtures', 'worker1.js'))
+  t.after(() => worker.terminate())
+
+  const interceptor = createThreadInterceptor({
+    domain: '.local',
+  })
+  interceptor.route('myserver', worker)
+
+  const agent = new Agent().compose(interceptor)
+
+  const { statusCode, body } = await request('http://myserver.local/echo-body', {
+    dispatcher: agent,
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ hello: 'world' }),
+  })
+
+  strictEqual(statusCode, 200)
+  deepStrictEqual(await body.json(), { hello: 'world' })
+})
