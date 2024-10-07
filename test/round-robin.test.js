@@ -1,11 +1,11 @@
 'use strict'
 
 const { test } = require('node:test')
-const { deepStrictEqual, rejects } = require('node:assert')
+const { deepStrictEqual, rejects, strictEqual } = require('node:assert')
 const { join } = require('path')
 const { Worker } = require('worker_threads')
 const { createThreadInterceptor } = require('../')
-const { Agent, request } = require('undici')
+const { Agent, request, interceptors } = require('undici')
 const { once } = require('events')
 const RoundRobin = require('../lib/roundrobin')
 
@@ -176,4 +176,41 @@ test('round-robin one worker is using network', async (t) => {
 test('RoundRobin remove unknown port', () => {
   const rr = new RoundRobin()
   rr.remove({})
+})
+
+test('503 status code re tries it', async (t) => {
+  const worker1 = new Worker(join(__dirname, 'fixtures', 'worker1.js'), {
+    workerData: {
+      message: 'mesh',
+      whoamiReturn503: true,
+    },
+  })
+  t.after(() => worker1.terminate())
+  const worker2 = new Worker(join(__dirname, 'fixtures', 'worker1.js'))
+  t.after(() => worker2.terminate())
+
+  const interceptor = createThreadInterceptor({
+    domain: '.local',
+  })
+  interceptor.route('myserver', [worker1, worker2])
+
+  const agent = new Agent().compose(interceptor, interceptors.retry())
+
+  {
+    const { body, statusCode } = await request('http://myserver.local/whoami', {
+      dispatcher: agent,
+    })
+
+    strictEqual(statusCode, 200)
+    deepStrictEqual(await body.json(), { threadId: worker2.threadId })
+  }
+
+  {
+    const { body, statusCode } = await request('http://myserver.local/whoami', {
+      dispatcher: agent,
+    })
+
+    strictEqual(statusCode, 200)
+    deepStrictEqual(await body.json(), { threadId: worker2.threadId })
+  }
 })
