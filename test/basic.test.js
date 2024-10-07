@@ -1,13 +1,14 @@
 'use strict'
 
 const { test } = require('node:test')
+const { Readable } = require('node:stream')
 const { deepStrictEqual, strictEqual, rejects, ifError } = require('node:assert')
-const { join } = require('path')
-const { Worker } = require('worker_threads')
+const { join } = require('node:path')
+const { Worker } = require('node:worker_threads')
+const { once } = require('node:events')
+const { setTimeout: sleep } = require('node:timers/promises')
 const { createThreadInterceptor } = require('../')
 const { Agent, request } = require('undici')
-const { once } = require('events')
-const { setTimeout: sleep } = require('timers/promises')
 const Fastify = require('fastify')
 
 test('basic', async (t) => {
@@ -319,40 +320,50 @@ test('close', async (t) => {
   await Promise.all([once(worker1, 'exit'), once(worker2, 'exit')])
 })
 
-test('timeout', async (t) => {
-  const empty = new Worker(join(__dirname, 'fixtures', 'empty.js'))
+test('POST', async (t) => {
+  const worker = new Worker(join(__dirname, 'fixtures', 'worker1.js'))
+  t.after(() => worker.terminate())
 
   const interceptor = createThreadInterceptor({
     domain: '.local',
-    timeout: 1000,
   })
-  interceptor.route('myserver', empty)
+  interceptor.route('myserver', worker)
 
   const agent = new Agent().compose(interceptor)
 
-  await rejects(request('http://myserver.local', {
+  const { statusCode, body } = await request('http://myserver.local/echo-body', {
     dispatcher: agent,
-  }), new Error('Timeout while waiting from a response from myserver.local'))
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ hello: 'world' }),
+  })
 
-  empty.postMessage('close')
-  await once(empty, 'exit')
+  strictEqual(statusCode, 200)
+  deepStrictEqual(await body.json(), { hello: 'world' })
 })
 
-test('timeout set to a boolean', async (t) => {
-  const empty = new Worker(join(__dirname, 'fixtures', 'empty.js'))
+test('POST with Stream', async (t) => {
+  const worker = new Worker(join(__dirname, 'fixtures', 'worker1.js'))
+  t.after(() => worker.terminate())
 
   const interceptor = createThreadInterceptor({
     domain: '.local',
-    timeout: true,
   })
-  interceptor.route('myserver', empty)
+  interceptor.route('myserver', worker)
 
   const agent = new Agent().compose(interceptor)
 
-  await rejects(request('http://myserver.local', {
+  const { statusCode, body } = await request('http://myserver.local/echo-body', {
     dispatcher: agent,
-  }), new Error('Timeout while waiting from a response from myserver.local'))
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: Readable.from(JSON.stringify({ hello: 'world' })),
+  })
 
-  empty.postMessage('close')
-  await once(empty, 'exit')
+  strictEqual(statusCode, 200)
+  deepStrictEqual(await body.json(), { hello: 'world' })
 })

@@ -36,4 +36,8 @@ app.get('/no-headers', (req, reply) => {
   reply.send(Readable.from(['text'], { objectMode: false }))
 })
 
+app.post('/echo-body', (req, reply) => {
+  reply.send(req.body)
+})
+
 wire({ server: app, port: parentPort })

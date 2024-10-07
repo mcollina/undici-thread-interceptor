@@ -56,9 +56,20 @@ function createThreadInterceptor (opts) {
         ...opts,
         headers,
       }
+
       delete newOpts.dispatcher
 
-      port.postMessage({ type: 'request', id, opts: newOpts, threadId })
+      if (newOpts.body?.[Symbol.asyncIterator]) {
+        collectBodyAndDispatch(newOpts, handler).then(() => {
+          port.postMessage({ type: 'request', id, opts: newOpts, threadId })
+        }, (err) => {
+          clearTimeout(handle)
+
+          handler.onError(err)
+        })
+      } else {
+        port.postMessage({ type: 'request', id, opts: newOpts, threadId })
+      }
       const inflights = portInflights.get(port)
 
       let handle
@@ -241,7 +252,7 @@ function wire ({ server: newServer, port, ...undiciOpts }) {
         url: opts.path,
         headers: opts.headers,
         query: opts.query,
-        body: opts.body,
+        body: opts.body instanceof Uint8Array ? Buffer.from(opts.body) : opts.body,
       }
 
       const onInject = (err, res) => {
@@ -299,6 +310,22 @@ function wire ({ server: newServer, port, ...undiciOpts }) {
 
   port.on('message', onMessage)
   return { interceptor, replaceServer }
+}
+
+async function collectBodyAndDispatch (opts) {
+  const data = []
+
+  for await (const chunk of opts.body) {
+    data.push(chunk)
+  }
+
+  if (typeof data[0] === 'string') {
+    opts.body = data.join('')
+  } else if (data[0] instanceof Buffer) {
+    opts.body = Buffer.concat(data)
+  } else {
+    throw new Error('Cannot not transfer streams of objects')
+  }
 }
 
 module.exports.createThreadInterceptor = createThreadInterceptor
