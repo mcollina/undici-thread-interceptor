@@ -79,6 +79,7 @@ function createThreadInterceptor (opts) {
           inflights.delete(id)
           handler.onError(new Error(`Timeout while waiting from a response from ${url.hostname}`))
         }, timeout)
+        handle.unref()
       }
 
       inflights.set(id, (err, res) => {
