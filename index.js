@@ -321,10 +321,10 @@ async function collectBodyAndDispatch (opts) {
 
   if (typeof data[0] === 'string') {
     opts.body = data.join('')
-  } else if (data[0] instanceof Buffer) {
+  } else if (data[0] instanceof Buffer || data[0] instanceof Uint8Array) {
     opts.body = Buffer.concat(data)
   } else {
-    throw new Error('Cannot not transfer streams of objects')
+    throw new Error('Cannot transfer streams of objects')
   }
 }
 
